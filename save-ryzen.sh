@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 export LANG=C
 
 USE_RAMDISK=true
@@ -6,8 +6,8 @@ NPROC=$1
 
 [ -n "$NPROC" ] || NPROC=$(nproc)
 
-echo "Install required packages"
-sudo apt install build-essential || exit 1
+#echo "Install required packages"
+#sudo apt install build-essential || exit 1
 
 if $USE_RAMDISK; then
   echo "Create compressed ramdisk (you need >16G(!) RAM)"
@@ -24,14 +24,17 @@ if $USE_RAMDISK; then
   export TMPDIR="$PWD/tmpdir"
 fi
 
+if ! [ -f "gcc-7.1.0/configure" ] ; then
 echo "Download GCC sources"
-wget ftp://ftp.fu-berlin.de/unix/languages/gcc/releases/gcc-7.1.0/gcc-7.1.0.tar.bz2 || exit 1
+  wget -c ftp://ftp.fu-berlin.de/unix/languages/gcc/releases/gcc-7.1.0/gcc-7.1.0.tar.bz2 || exit 1
 
-echo "Extract GCC sources"
-tar xf gcc-7.1.0.tar.bz2 || exit 1
+  echo "Extract GCC sources"
+  tar xf gcc-7.1.0.tar.bz2 || exit 1
 
-echo "Download prerequisites"
-(cd gcc-7.1.0/ && ./contrib/download_prerequisites)
+  echo "Download prerequisites"
+  (cd gcc-7.1.0/ && ./contrib/download_prerequisites)
+fi
+
 
 [ -d 'buildloop.d' ] && rm -r 'buildloop.d'
 mkdir -p buildloop.d || exit 1
