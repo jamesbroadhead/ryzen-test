@@ -4,19 +4,37 @@ export LANG=C
 #USE_RAMDISK=true
 USE_RAMDISK=false
 
+CLEAN_ON_EXIT=false
 NPROC=$1
+TPROC=$2
 
 [ -n "$NPROC" ] || NPROC=$(nproc)
+[ -n "$TPROC" ] || TPROC=1
 
-#echo "Install required packages"
-#sudo apt install build-essential || exit 1
+cleanup() {
+  sudo rm -rf /mnt/ramdisk/*
+  sudo umount /mnt/ramdisk
+}
+if $CLEAN_ON_EXIT; then
+  trap "cleanup" SIGHUP SIGINT SIGTERM EXIT
+fi
+
+echo "Install required packages"
+if which apt-get &>/dev/null; then
+ sudo apt-get install build-essential
+elif which dnf &>/dev/null; then
+ sudo dnf install -y @development-tools
+else
+  echo "Unknown distro - skipping installing deps. Please provide them yourself"
+  exit 1
+fi
 
 if $USE_RAMDISK; then
-  echo "Create compressed ramdisk (you need >16G(!) RAM)"
+  echo "Create compressed ramdisk"
   sudo mkdir -p /mnt/ramdisk || exit 1
   sudo modprobe zram num_devices=1 || exit 1
   echo 64G | sudo tee /sys/block/zram0/disksize || exit 1
-  sudo mke2fs -q -m 0 -b 4096 -O sparse_super -L zram /dev/zram0 || exit 1
+  sudo mkfs.ext4 -q -m 0 -b 4096 -O sparse_super -L zram /dev/zram0 || exit 1
   sudo mount -o relatime,nosuid,discard /dev/zram0 /mnt/ramdisk/ || exit 1
   sudo mkdir -p /mnt/ramdisk/workdir || exit 1
   sudo chmod 777 /mnt/ramdisk/workdir || exit 1
@@ -50,12 +68,15 @@ uname -a
 echo "cat /proc/sys/kernel/randomize_va_space"
 cat /proc/sys/kernel/randomize_va_space
 
-journalctl -kf | sed 's/^/[KERN] /' &
+# start journal process in different working directory
+pushd /
+  journalctl -kf | sed 's/^/[KERN] /' &
+popd
 echo "Using ${NPROC} parallel processes"
 
 START=$(date +%s)
 for ((I=0;$I<$NPROC;I++)); do
-  (./buildloop.sh "loop-$I" || echo "TIME TO FAIL: $(($(date +%s)-${START})) s") | sed "s/^/\[loop-${I}\] /" &
+  (./buildloop.sh "loop-$I" "$TPROC" || echo "TIME TO FAIL: $(($(date +%s)-${START})) s") | sed "s/^/\[loop-${I}\] /" &
   sleep 1
 done
 
